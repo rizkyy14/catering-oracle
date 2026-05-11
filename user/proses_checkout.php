@@ -6,6 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Ambil data dari form checkout (misal dari dashboard pelanggan)
     $id_user = $_POST['id_user']; // ID User yang login
     $total_bayar = $_POST['total_bayar']; // Total belanja
+    $tipe_pesanan = $_POST['tipe_pesanan']; // Tipe pesanan
     
     // 1. Buat External ID unik (Misal: INV-171448xxxx)
     $external_id = 'INV-' . time();
@@ -14,11 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data = [
         'external_id' => $external_id,
         'amount' => (int)$total_bayar,
-        'payer_email' => $_POST['email_pelanggan'], // Ambil dari input atau tabel user
-        'description' => 'Pembayaran Catering Rizky - ' . $external_id,
-        'invoice_duration' => 86400, // Aktif 24 Jam
-        'success_redirect_url' => 'http://localhost/catering_native/pembayaran_sukses.php'
+        'payer_email' => $email_user,
+        'description' => 'Pemesanan Catering - ' . $external_id,
+        'invoice_duration' => 86400, // Aktif 24 jam
+       'success_redirect_url' => $protocol . $host . '/catering_native/pembayaran_sukses.php?external_id=' . $external_id
     ];
+
 
     $payload = json_encode($data);
 
@@ -38,15 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         // 3. Simpan ke Database Oracle
         // Sesuaikan dengan kolom: ID_USER, TGL_PESAN, TOTAL_BAYAR, EXTERNAL_ID, CHECKOUT_URL, STATUS_PEMBAYARAN
-        $query = "INSERT INTO pesanan (ID_USER, TGL_PESAN, TOTAL_BAYAR, EXTERNAL_ID, CHECKOUT_URL, STATUS_PEMBAYARAN) 
-                  VALUES (:id_u, CURRENT_TIMESTAMP, :total, :ext_id, :url, 'PENDING')";
+        $query = "INSERT INTO pesanan (ID_USER, TOTAL_BAYAR, EXTERNAL_ID, CHECKOUT_URL, STATUS_PEMBAYARAN, TIPE_PESANAN) 
+              VALUES (:id_user, :total, :ext_id, :url, 'PENDING', :tipe)";
 
-        $stmt = oci_parse($conn, $query);
+    $stmt = oci_parse($conn, $query);
 
-        oci_bind_by_name($stmt, ":id_u", $id_user);
-        oci_bind_by_name($stmt, ":total", $total_bayar);
-        oci_bind_by_name($stmt, ":ext_id", $external_id);
-        oci_bind_by_name($stmt, ":url", $checkout_url);
+    oci_bind_by_name($stmt, ":id_user", $id_user);
+    oci_bind_by_name($stmt, ":total", $total_bayar);
+    oci_bind_by_name($stmt, ":ext_id", $external_id);
+    oci_bind_by_name($stmt, ":url", $checkout_url);
+    oci_bind_by_name($stmt, ":tipe", $tipe_pesanan);
 
         $exec = oci_execute($stmt);
 

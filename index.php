@@ -16,7 +16,7 @@ if (isset($_GET['logout'])) {
 ?>
 
 <!DOCTYPE html>
-<html lang="id" class="scroll-smooth">
+<html lang="id" class="scroll-smooth overflow-x-hidden">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,35 +25,83 @@ if (isset($_GET['logout'])) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style> 
         body { font-family: 'Poppins', sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); }
         .menu-slider::-webkit-scrollbar { display: none; } [x-cloak] { display: none !important; }
     </style>
 </head>
-<body x-data="{ loginOpen: false, regOpen: false, orderOpen: false, selectedMenu: '', selectedHarga: 0 }" class="bg-gray-50 overflow-x-hidden">
+<body x-data="{ 
+    loginOpen: false, 
+    regOpen: false, 
+    orderOpen: false, 
+    selectedMenu: '', 
+    selectedHarga: 0,
+    isLoggedIn: <?= isset($_SESSION['nama']) ? 'true' : 'false' ?> // Tambahkan ini
+}" class="bg-gray-50 overflow-x-hidden">
 
     <!-- NAVBAR -->
-    <nav class="fixed w-full z-50 glass border-b border-gray-100">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 class="text-2xl font-bold text-orange-600">Catering<span class="text-gray-800">Rizky</span></h1>
+<nav x-data="{ mobileMenu: false }" class="fixed top-0 left-0 right-0 z-50 glass border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-20"> <div class="flex-shrink-0">
+                <a href="#home" class="text-2xl font-bold text-orange-600">
+                    Catering<span class="text-gray-800">Rizky</span>
+                </a>
+            </div>
+
             <div class="hidden md:flex space-x-8 font-medium">
                 <a href="#home" class="hover:text-orange-500 transition">Home</a>
                 <a href="#menu" class="hover:text-orange-500 transition">Menu</a>
                 <a href="#about" class="hover:text-orange-500 transition">About</a>
                 <a href="#contact" class="hover:text-orange-500 transition">Contact</a>
             </div>
-            <div class="space-x-4">
+
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <div class="hidden md:flex items-center space-x-4">
+                    <?php if(isset($_SESSION['nama'])): ?>
+                        <span class="text-gray-700 font-medium text-sm">Halo, <?= $_SESSION['nama'] ?></span>
+                        <a href="?logout=1" class="text-red-500 text-sm font-bold">Logout</a>
+                    <?php else: ?>
+                        <button @click="loginOpen = true" class="text-gray-700 hover:text-orange-600 font-semibold">Login</button>
+                        <button @click="regOpen = true" class="bg-orange-600 text-white px-6 py-2 rounded-full hover:bg-orange-700 transition">Daftar</button>
+                    <?php endif; ?>
+                </div>
+
+                <button @click="mobileMenu = !mobileMenu" class="md:hidden p-2 rounded-xl hover:bg-gray-100 transition focus:outline-none">
+                    <svg x-show="!mobileMenu" class="h-6 w-6 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <svg x-show="mobileMenu" class="h-6 w-6 text-gray-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" x-cloak>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="mobileMenu" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         class="md:hidden bg-white border-b border-gray-100 overflow-hidden" x-cloak>
+        <div class="px-6 pt-2 pb-6 space-y-2">
+            <a href="#home" @click="mobileMenu = false" class="block py-3 text-gray-700 font-medium border-b border-gray-50">Home</a>
+            <a href="#menu" @click="mobileMenu = false" class="block py-3 text-gray-700 font-medium border-b border-gray-50">Menu</a>
+            <a href="#about" @click="mobileMenu = false" class="block py-3 text-gray-700 font-medium border-b border-gray-50">About</a>
+            
+            <div class="pt-4 flex flex-col space-y-3">
                 <?php if(isset($_SESSION['nama'])): ?>
-                    <span class="text-gray-700 font-medium">Halo, <?= $_SESSION['nama'] ?></span>
-                    <a href="?logout=1" class="text-red-500 text-sm font-bold">Logout</a>
+                    <a href="histori_pesanan.php" class="text-center bg-gray-100 py-3 rounded-2xl font-bold">Histori Pesanan</a>
+                    <a href="?logout=1" class="text-center text-red-500 font-bold">Logout</a>
                 <?php else: ?>
-                    <button @click="loginOpen = true" class="text-gray-700 hover:text-orange-600 font-semibold">Login</button>
-                    <button @click="regOpen = true" class="bg-orange-600 text-white px-6 py-2 rounded-full hover:bg-orange-700 transition">Daftar</button>
+                    <button @click="loginOpen = true; mobileMenu = false" class="w-full py-3 text-gray-700 font-bold border border-gray-200 rounded-2xl">Login</button>
+                    <button @click="regOpen = true; mobileMenu = false" class="w-full py-3 bg-orange-600 text-white font-bold rounded-2xl">Daftar</button>
                 <?php endif; ?>
             </div>
         </div>
-    </nav>
+    </div>
+</nav>
 
     <!-- HERO -->
     <section id="home" class="h-screen flex items-center justify-center bg-orange-50 px-6">
@@ -101,8 +149,16 @@ if (isset($_GET['logout'])) {
                     <p class="text-gray-500 mb-6 text-sm"><?= $row['DESKRIPSI']; ?></p>
                     <div class="flex justify-between items-center">
                         <span class="text-2xl font-bold text-orange-600">Rp <?= number_format($row['HARGA'], 0, ',', '.'); ?></span>
-                        <button @click="orderOpen = true; selectedMenu = '<?= $row['NAMA_MENU']; ?>'; selectedHarga = <?= $row['HARGA']; ?>" 
-                                class="bg-gray-900 text-white px-6 py-2 rounded-xl hover:bg-orange-600 transition">Pesan</button>
+                        <button @click="if (isLoggedIn) { 
+            orderOpen = true; 
+            selectedMenu = '<?= $row['NAMA_MENU']; ?>'; 
+            selectedHarga = <?= $row['HARGA']; ?> 
+        } else { 
+            loginOpen = true; 
+        }" 
+        class="bg-gray-900 text-white px-6 py-2 rounded-xl hover:bg-orange-600 transition">
+    Pesan
+</button>
                     </div>
                 </div>
             </div>
@@ -110,17 +166,38 @@ if (isset($_GET['logout'])) {
         </div>
     </section>
 
+    <section class="py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-6">
+        <h3 class="text-3xl font-bold mb-8 text-center">Diskusi & <span class="text-orange-600">Review</span></h3>
+        <div id="disqus_thread"></div>
+        <script>
+            var disqus_config = function () {
+                this.page.url = window.location.href;  
+                this.page.identifier = 'catering_rizky_main'; 
+            };
+            (function() { 
+                var d = document, s = d.createElement('script');
+                s.src = 'https://catering-2.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    </div>
+</section>
+
     <!-- SECTION: CONTACT, FEEDBACK & MAP -->
     <section id="contact" class="py-24 bg-white">
         <div class="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12">
             <div data-aos="fade-up">
-                <h3 class="text-3xl font-bold mb-6">Kritik & Saran</h3>
-                <form class="space-y-4">
-                    <input type="text" placeholder="Nama Lengkap" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-orange-500">
-                    <textarea placeholder="Pesan Anda" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-orange-500 h-32"></textarea>
-                    <button class="bg-orange-600 text-white px-8 py-3 rounded-xl font-bold">Kirim Saran</button>
-                </form>
-            </div>
+    <h3 class="text-3xl font-bold mb-6">Kritik & Saran</h3>
+    <div class="space-y-4">
+        <input type="text" id="wa_nama" placeholder="Nama Lengkap" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-orange-500">
+        <textarea id="wa_pesan" placeholder="Pesan Anda" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-orange-500 h-32"></textarea>
+        <button onclick="sendToWA()" class="bg-orange-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-orange-700 transition">
+            Kirim ke WhatsApp
+        </button>
+    </div>
+</div>
             <div data-aos="fade-up" class="rounded-3xl overflow-hidden shadow-xl h-80">
                 <!-- Google Maps Iframe -->
                 <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3982.103002626496!2d98.65345731475924!3d3.56586419740523!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x30312fe3e48e02e1%3A0x6b668d29b0a68d0d!2sPoliteknik%20Negeri%20Medan!5e0!3m2!1sid!2sid!4v1649123456789!5m2!1sid!2sid" 
@@ -170,7 +247,7 @@ if (isset($_GET['logout'])) {
         <h3 class="text-3xl font-bold mb-2 text-center text-gray-800">Daftar Akun</h3>
         <p class="text-gray-500 text-center mb-8 text-sm">Bergabunglah dengan komunitas kuliner kami.</p>
         
-        <form action="register.php" method="POST" class="space-y-4">
+        <form action="register.php" method="POST" class="space-y-4" enctype="multipart/form-data">
             <input type="text" name="nama" placeholder="Nama Lengkap" 
                    class="w-full px-5 py-4 rounded-2xl bg-gray-100 border-none focus:ring-2 focus:ring-orange-500" required>
             <input type="email" name="email" placeholder="Alamat Email" 
@@ -220,5 +297,20 @@ if (isset($_GET['logout'])) {
     </footer>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>AOS.init();</script>
+    <script>
+        function sendToWA() {
+    const nama = document.getElementById('wa_nama').value;
+    const pesan = document.getElementById('wa_pesan').value;
+    const nomorWA = "6281262581027"; // Ganti dengan nomor WA kamu (awali dengan 62)
+
+    if (nama === "" || pesan === "") {
+        alert("Mohon isi nama dan pesan terlebih dahulu!");
+        return;
+    }
+
+    const teks = `Halo Admin Catering Rizky,%0A%0ANama: *${nama}*%0APesan: ${pesan}`;
+    window.open(`https://wa.me/${nomorWA}?text=${teks}`, '_blank');
+}
+    </script>
 </body>
 </html>

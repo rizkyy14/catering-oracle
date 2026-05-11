@@ -1,12 +1,39 @@
 <?php
-include '../config/auth.php'; // Pastikan path benar
+include '../config/auth.php';
 include '../config/database.php';
 
-// Proteksi: Pastikan hanya user yang sudah login bisa akses
+// --- LOGIKA UPDATE STATUS PEMBAYARAN (TAMBAHKAN INI) ---
+// --- LOGIKA UPDATE STATUS PEMBAYARAN DI index.php ---
+if (isset($_GET['pembayaran_selesai'])) {
+    $ext_id = $_GET['pembayaran_selesai'];
+    
+    $query_update = "UPDATE pesanan SET STATUS_PEMBAYARAN = 'PAID' 
+                    WHERE EXTERNAL_ID = :eid AND STATUS_PEMBAYARAN = 'PENDING'";
+    
+    $stmt_update = oci_parse($conn, $query_update);
+    oci_bind_by_name($stmt_update, ":eid", $ext_id);
+    $exec_update = oci_execute($stmt_update);
+
+    if ($exec_update) {
+        echo "<script>
+            document.addEventListener('DOMContentLoaded', function() {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Pembayaran Berhasil!',
+                    html: 'Pesanan Anda sedang diproses.<br><b>Tim kami akan menghubungi Anda melalui email untuk detail pengiriman.</b>',
+                    confirmButtonColor: '#ea580c'
+                }).then(() => { window.location.href='index.php'; });
+            });
+        </script>";
+    }
+}
+// --- AKHIR LOGIKA UPDATE ---
+
 if (!isset($_SESSION['id_user'])) {
-    header("Location: ../index.php"); // Keluar ke landing page jika belum login
+    header("Location: ../index.php");
     exit();
 }
+// ... sisa kode index.php kamu ...
 
 $id_user = $_SESSION['id_user'];
 
@@ -36,11 +63,30 @@ oci_execute($stmt_menu);
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body { font-family: 'Poppins', sans-serif; }
         .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); }
         .menu-slider::-webkit-scrollbar { display: none; }
         [x-cloak] { display: none !important; }
+
+
+    /* ... style yang sudah ada ... */
+    .menu-slider {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        gap: 1.5rem;
+        padding-bottom: 1rem;
+    }
+    .menu-card {
+        flex: 0 0 300px; /* Lebar kartu di mobile */
+        scroll-snap-align: start;
+    }
+    @media (min-width: 768px) {
+        .menu-card { flex: 0 0 350px; } /* Lebar kartu di desktop */
+    }
+    .menu-slider::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body x-data="{ profileOpen: false, orderOpen: false, selectedMenu: '', selectedHarga: 0, idMenu: '' }" class="bg-gray-50">
@@ -52,7 +98,7 @@ oci_execute($stmt_menu);
             
             <div class="hidden md:flex space-x-8 font-medium">
                 <a href="#menu" class="hover:text-orange-500 transition">Jelajah Menu</a>
-                <a href="histori_pesanan.php" class="hover:text-orange-500 transition">Pesanan Saya</a>
+                <a href="user/histori_pesanan.php" class="hover:text-orange-500 transition">Pesanan Saya</a>
             </div>
 
             <!-- Profile Dropdown -->
@@ -110,27 +156,88 @@ oci_execute($stmt_menu);
     </section>
 
     <!-- SECTION MENU -->
-    <section id="menu" class="py-16">
-        <div class="max-w-7xl mx-auto px-6">
-            <h3 class="text-3xl font-bold mb-10" data-aos="fade-up">Daftar Menu Tersedia</h3>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8" data-aos="fade-up">
-                <?php while ($row = oci_fetch_array($stmt_menu, OCI_ASSOC)): ?>
-                <div class="bg-white rounded-[32px] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group">
-                    <div class="h-52 bg-gray-200 relative overflow-hidden">
-                        <img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" alt="Food">
-                    </div>
-                    <div class="p-6">
-                        <h4 class="text-xl font-bold mb-2"><?= $row['NAMA_MENU']; ?></h4>
-                        <p class="text-gray-500 text-sm mb-6 line-clamp-2"><?= $row['DESKRIPSI']; ?></p>
-                        <div class="flex justify-between items-center">
-                            <span class="text-xl font-bold text-orange-600">Rp <?= number_format($row['HARGA'], 0, ',', '.'); ?></span>
-                            <button @click="orderOpen = true; selectedMenu = '<?= $row['NAMA_MENU']; ?>'; selectedHarga = <?= $row['HARGA']; ?>; idMenu = '<?= $row['ID_MENU']; ?>'" 
-                                    class="bg-gray-900 text-white px-6 py-2 rounded-xl hover:bg-orange-600 transition shadow-md">Pesan</button>
-                        </div>
+    <section id="menu" class="py-16 overflow-hidden">
+    <div class="max-w-7xl mx-auto px-6">
+        <div class="flex justify-between items-end mb-10" data-aos="fade-up">
+            <div>
+                <h3 class="text-3xl font-bold">Daftar Menu Tersedia</h3>
+                <p class="text-gray-500 mt-2">Geser untuk melihat menu lezat lainnya</p>
+            </div>
+            <div class="hidden md:flex space-x-2">
+                <div class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 italic text-xs">Scroll -></div>
+            </div>
+        </div>
+        
+        <div class="menu-slider" data-aos="fade-up">
+            <?php while ($row = oci_fetch_array($stmt_menu, OCI_ASSOC)): ?>
+            <div class="menu-card bg-white rounded-[32px] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 group">
+                <div class="h-52 bg-gray-200 relative overflow-hidden">
+                    <img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c" class="w-full h-full object-cover group-hover:scale-110 transition duration-500" alt="Food">
+                </div>
+                <div class="p-6">
+                    <h4 class="text-xl font-bold mb-2"><?= $row['NAMA_MENU']; ?></h4>
+                    <p class="text-gray-500 text-sm mb-6 line-clamp-2"><?= $row['DESKRIPSI']; ?></p>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xl font-bold text-orange-600">Rp <?= number_format($row['HARGA'], 0, ',', '.'); ?></span>
+                        <button @click="orderOpen = true; selectedMenu = '<?= $row['NAMA_MENU']; ?>'; selectedHarga = <?= $row['HARGA']; ?>; idMenu = '<?= $row['ID_MENU']; ?>'" 
+                                class="bg-gray-900 text-white px-6 py-2 rounded-xl hover:bg-orange-600 transition shadow-md">Pesan</button>
                     </div>
                 </div>
-                <?php endwhile; ?>
+            </div>
+            <?php endwhile; ?>
+
+            <div class="menu-card bg-orange-600 rounded-[32px] overflow-hidden shadow-lg border border-orange-500 group flex flex-col justify-center p-8 text-white relative">
+                <div class="relative z-10">
+                    <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6 text-3xl">👨‍🍳</div>
+                    <h4 class="text-2xl font-bold mb-2">Punya Menu Sendiri?</h4>
+                    <p class="text-orange-100 text-sm mb-8">Request menu custom untuk acara spesial Anda. Diskusikan langsung dengan Chef kami via WhatsApp.</p>
+                    <a href="https://wa.me/6281262581027?text=Halo%20Catering%20Rizky,%20saya%20ingin%20diskusi%20tentang%20pesanan%20menu%20custom." 
+                       target="_blank"
+                       class="inline-block w-full text-center bg-white text-orange-600 py-4 rounded-2xl font-bold hover:bg-orange-50 transition shadow-xl">
+                        Diskusi via WhatsApp
+                    </a>
+                </div>
+                <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-orange-500 rounded-full opacity-30"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+    <section class="py-24 bg-white">
+    <div class="max-w-7xl mx-auto px-6">
+        <h3 class="text-3xl font-bold mb-8 text-center">Diskusi & <span class="text-orange-600">Review</span></h3>
+        <div id="disqus_thread"></div>
+        <script>
+            var disqus_config = function () {
+                this.page.url = window.location.href;  
+                this.page.identifier = 'catering_rizky_main'; 
+            };
+            (function() { 
+                var d = document, s = d.createElement('script');
+                s.src = 'https://catering-2.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    </div>
+</section>
+
+ <section id="contact" class="py-24 bg-white">
+        <div class="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12">
+            <div data-aos="fade-up">
+    <h3 class="text-3xl font-bold mb-6">Kritik & Saran</h3>
+    <div class="space-y-4">
+        <input type="text" id="wa_nama" placeholder="Nama Lengkap" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-orange-500">
+        <textarea id="wa_pesan" placeholder="Pesan Anda" class="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-orange-500 h-32"></textarea>
+        <button onclick="sendToWA()" class="bg-orange-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-orange-700 transition">
+            Kirim ke WhatsApp
+        </button>
+    </div>
+</div>
+            <div data-aos="fade-up" class="rounded-3xl overflow-hidden shadow-xl h-80">
+                <!-- Google Maps Iframe -->
+                <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3982.103002626496!2d98.65345731475924!3d3.56586419740523!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x30312fe3e48e02e1%3A0x6b668d29b0a68d0d!2sPoliteknik%20Negeri%20Medan!5e0!3m2!1sid!2sid!4v1649123456789!5m2!1sid!2sid" 
+                        width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
             </div>
         </div>
     </section>
@@ -165,6 +272,15 @@ oci_execute($stmt_menu);
                           class="w-full px-5 py-4 rounded-2xl bg-gray-100 border-none focus:ring-2 focus:ring-orange-500 h-28" required></textarea>
             </div>
 
+            <div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Tipe Pesanan</label>
+    <select name="tipe_pesanan" class="w-full px-5 py-4 rounded-2xl bg-gray-100 border-none focus:ring-2 focus:ring-orange-500">
+        <option value="Harian">Harian (Sekali Pesan)</option>
+        <option value="Bulanan">Langganan Bulanan (30 Hari)</option>
+        <option value="Event">Acara / Event (Jumlah Besar)</option>
+    </select>
+</div>
+
             <!-- Box Estimasi yang Ter-sinkronisasi -->
             <div class="bg-orange-50 p-6 rounded-3xl flex justify-between items-center mb-4 border border-orange-100">
                 <div>
@@ -186,8 +302,33 @@ oci_execute($stmt_menu);
         </form>
     </div>
 </div>
-
+<footer class="bg-gray-900 text-white py-12">
+        <div class="max-w-7xl mx-auto px-6 text-center">
+            <h2 class="text-2xl font-bold mb-4">Catering Rizky</h2>
+            <p class="text-gray-400 mb-8">Politeknik Negeri Medan - Manajemen Informatika 2026</p>
+            <div class="flex justify-center space-x-6">
+                <a href="#" class="hover:text-orange-500">Instagram</a>
+                <a href="#" class="hover:text-orange-500">WhatsApp</a>
+            </div>
+        </div>
+    </footer>
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>AOS.init({ duration: 800, once: true });</script>
+    <script>
+        function sendToWA() {
+    const nama = document.getElementById('wa_nama').value;
+    const pesan = document.getElementById('wa_pesan').value;
+    const nomorWA = "6281262581027"; // Ganti dengan nomor WA kamu (awali dengan 62)
+
+    if (nama === "" || pesan === "") {
+        alert("Mohon isi nama dan pesan terlebih dahulu!");
+        return;
+    }
+
+    const teks = `Halo Admin Catering Rizky,%0A%0ANama: *${nama}*%0APesan: ${pesan}`;
+    window.open(`https://wa.me/${nomorWA}?text=${teks}`, '_blank');
+}
+    </script>
+
 </body>
 </html>
