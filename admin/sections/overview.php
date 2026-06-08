@@ -1,38 +1,51 @@
 <?php
-// Pastikan file ini dipanggil melalui dashboard.php sehingga variabel $conn sudah tersedia
+// File: admin/sections/overview.php
 if (!isset($conn)) {
     die("Akses database tidak ditemukan.");
 }
 
-// 1. Hitung Total Pesanan
-$q_orders = "SELECT COUNT(*) AS TOTAL FROM pesanan";
-$s_orders = oci_parse($conn, $q_orders);
-oci_execute($s_orders);
-$total_orders = oci_fetch_array($s_orders, OCI_ASSOC)['TOTAL'];
-
-// 2. Hitung Total Pendapatan (Hanya yang statusnya 'PAID')
-$q_income = "SELECT SUM(TOTAL_BAYAR) AS TOTAL FROM pesanan WHERE STATUS_PEMBAYARAN = 'PAID'";
-$s_income = oci_parse($conn, $q_income);
-oci_execute($s_income);
-$fetch_income = oci_fetch_array($s_income, OCI_ASSOC);
-$total_income = $fetch_income['TOTAL'] ?? 0;
-
-// 3. Hitung Total Pelanggan (Role 'pelanggan')
+// --- HITUNG TOTAL PELANGGAN (Dari Database Lokal Laragon) ---
 $q_users = "SELECT COUNT(*) AS TOTAL FROM users WHERE ROLE = 'pelanggan'";
 $s_users = oci_parse($conn, $q_users);
 oci_execute($s_users);
-$total_users = oci_fetch_array($s_users, OCI_ASSOC)['TOTAL'];
+$fetch_users = oci_fetch_array($s_users, OCI_ASSOC);
+$total_users = $fetch_users['TOTAL'] ?? 0;
 
-// 4. Ambil 5 Pesanan Terbaru untuk Tabel Ringkasan
-$q_recent = "SELECT * FROM (SELECT * FROM pesanan ORDER BY TGL_PESAN DESC) WHERE ROWNUM <= 5";
-$s_recent = oci_parse($conn, $q_recent);
-oci_execute($s_recent);
+$all_pesanan_raw = isset($data_apex['items']) ? $data_apex['items'] : ($data_apex ?? []);
+
+
+// --- PROSES NORMALISASI DATA (Paksa Semua Key Menjadi Lowercase) ---
+$all_pesanan = [];
+if (is_array($all_pesanan_raw) && !empty($all_pesanan_raw)) {
+    foreach ($all_pesanan_raw as $raw_item) {
+        $all_pesanan[] = array_change_key_case($raw_item, CASE_LOWER);
+    }
+}
+
+// Balik urutan array agar ID paling baru muncul di atas
+$all_pesanan = array_reverse($all_pesanan);
+
+// Hitung Statistik
+$total_orders = count($all_pesanan);
+$total_income = 0;
+$recent_orders = [];
+
+foreach ($all_pesanan as $p) {
+    $status_pembayaran = isset($p['status_pembayaran']) ? strtoupper($p['status_pembayaran']) : 'PENDING';
+    $total_bayar = $p['total_bayar'] ?? 0;
+
+    if ($status_pembayaran === 'PAID') {
+        $total_income += $total_bayar;
+    }
+    // Ambil maksimal 5 pesanan terbaru untuk ringkasan dashboard
+    if (count($recent_orders) < 5) {
+        $recent_orders[] = $p;
+    }
+}
 ?>
 
 <div class="space-y-8 animate-in fade-in duration-500">
-    <!-- Row Statistik -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Card Total Pesanan -->
         <div class="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 hover:shadow-md transition">
             <div class="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -41,10 +54,9 @@ oci_execute($s_recent);
             </div>
             <p class="text-slate-400 font-bold text-xs uppercase tracking-widest mb-1">Total Pesanan</p>
             <h3 class="text-4xl font-bold text-slate-800"><?= $total_orders ?></h3>
-            <p class="text-indigo-500 text-xs mt-2 font-medium">Semua transaksi masuk</p>
+            <p class="text-indigo-500 text-xs mt-2 font-medium">Semua transaksi masuk cloud</p>
         </div>
 
-        <!-- Card Pendapatan -->
         <div class="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 hover:shadow-md transition">
             <div class="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -53,10 +65,9 @@ oci_execute($s_recent);
             </div>
             <p class="text-slate-400 font-bold text-xs uppercase tracking-widest mb-1">Total Pendapatan</p>
             <h3 class="text-4xl font-bold text-slate-800">Rp <?= number_format($total_income, 0, ',', '.') ?></h3>
-            <p class="text-emerald-500 text-xs mt-2 font-medium">Dana yang berhasil ditarik</p>
+            <p class="text-emerald-500 text-xs mt-2 font-medium">Dana terkunci status PAID</p>
         </div>
 
-        <!-- Card Pelanggan -->
         <div class="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 hover:shadow-md transition">
             <div class="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-4">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -65,41 +76,46 @@ oci_execute($s_recent);
             </div>
             <p class="text-slate-400 font-bold text-xs uppercase tracking-widest mb-1">Pelanggan Aktif</p>
             <h3 class="text-4xl font-bold text-slate-800"><?= $total_users ?></h3>
-            <p class="text-blue-500 text-xs mt-2 font-medium">User terdaftar sistem</p>
+            <p class="text-blue-500 text-xs mt-2 font-medium">User terdaftar sistem lokal</p>
         </div>
     </div>
 
-    <!-- Row Tabel Pesanan Terbaru -->
     <div class="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
         <div class="px-8 py-6 border-b border-slate-50 flex justify-between items-center">
-            <h4 class="font-bold text-slate-800">5 Pesanan Terakhir</h4>
-            <a href="dashboard.php?page=pesanan" class="text-xs font-bold text-indigo-600 hover:underline text-orange-600">Lihat Semua →</a>
+            <h4 class="font-bold text-slate-800">5 Pesanan Terakhir (Cloud Server)</h4>
+            <a href="index.php?page=pesanan" class="text-xs font-bold text-orange-600 hover:underline">Lihat Semua →</a>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left">
                 <thead class="bg-slate-50">
                     <tr>
                         <th class="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">ID</th>
-                        <th class="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tanggal</th>
+                        <th class="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">External ID Xendit</th>
                         <th class="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total</th>
                         <th class="px-8 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
-                    <?php while ($row = oci_fetch_array($s_recent, OCI_ASSOC)): ?>
-                    <tr class="hover:bg-slate-50/50 transition">
-                        <td class="px-8 py-4 text-sm font-bold text-slate-700">#<?= $row['ID_PESANAN'] ?></td>
-                        <td class="px-8 py-4 text-sm text-slate-500"><?= $row['TGL_PESAN'] ?></td>
-                        <td class="px-8 py-4 text-sm font-bold text-slate-800">Rp <?= number_format($row['TOTAL_BAYAR'], 0, ',', '.') ?></td>
-                        <td class="px-8 py-4">
-                            <?php if ($row['STATUS_PEMBAYARAN'] == 'PAID'): ?>
-                                <span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold uppercase">Paid</span>
-                            <?php else: ?>
-                                <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold uppercase">Pending</span>
-                            <?php endif; ?>
-                        </td>
+                    <?php if (empty($recent_orders)): ?>
+                    <tr>
+                        <td colspan="4" class="px-8 py-6 text-sm text-center text-slate-400 italic">Belum ada data transaksi di Cloud server.</td>
                     </tr>
-                    <?php endwhile; ?>
+                    <?php else: ?>
+                        <?php foreach ($recent_orders as $row): ?>
+                        <tr class="hover:bg-slate-50/50 transition">
+                            <td class="px-8 py-4 text-sm font-bold text-slate-700">#<?= $row['id_pesanan'] ?></td>
+                            <td class="px-8 py-4 text-sm text-slate-500 font-mono"><?= htmlspecialchars($row['external_id'] ?? '-') ?></td>
+                            <td class="px-8 py-4 text-sm font-bold text-slate-800">Rp <?= number_format($row['total_bayar'], 0, ',', '.') ?></td>
+                            <td class="px-8 py-4">
+                                <?php if (isset($row['status_pembayaran']) && strtoupper($row['status_pembayaran']) == 'PAID'): ?>
+                                    <span class="px-3 py-1 rounded-full bg-emerald-100 text-emerald-600 text-[10px] font-bold uppercase">Paid</span>
+                                <?php else: ?>
+                                    <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold uppercase">Pending</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
